@@ -1,133 +1,441 @@
+# Writeup: Track 3D-Objects Over Time - Midterm Project
 
-# SDCND : Sensor Fusion and Tracking
-This is the project for the second course in the  [Udacity Self-Driving Car Engineer Nanodegree Program](https://www.udacity.com/course/c-plus-plus-nanodegree--nd213) : Sensor Fusion and Tracking. 
+All corresponding code for this project can be found in the `student` directory.
 
-In this project, you'll fuse measurements from LiDAR and camera and track vehicles over time. You will be using real-world data from the Waymo Open Dataset, detect objects in 3D point clouds and apply an extended Kalman filter for sensor fusion and tracking.
+### 1. Write a short recap of the four tracking steps and what you implemented there (filter, track management, association, camera fusion). Which results did you achieve? Which part of the project was most difficult for you to complete, and why?
 
-<img src="img/img_title_1.jpeg"/>
+#### Step 1 - Visualizing Range and Point Cloud Data
 
-The project consists of two major parts: 
-1. **Object detection**: In this part, a deep-learning approach is used to detect vehicles in LiDAR data based on a birds-eye view perspective of the 3D point-cloud. Also, a series of performance measures is used to evaluate the performance of the detection approach. 
-2. **Object tracking** : In this part, an extended Kalman filter is used to track vehicles over time, based on the lidar detections fused with camera detections. Data association and track management are implemented as well.
+The first part of this section involved visualizing range data using code similar to sections 12-18 of lesson 2. The lidar data is extracted from the frame, parsed, and converted to a numpy array. Negative values are removed (since these indicate non-returned values), converted to an image, and cropped to the 90 degrees in front of the vehicle. The results looks like:
 
-The following diagram contains an outline of the data flow and of the individual steps that make up the algorithm. 
+<img src="./img/range_image.png">
 
-<img src="img/img_title_2_new.png"/>
+Next, we visualize the point cloud from the lidar data, following the general examples in lesson 3. The resulting point cloud initially shows an overhead view.
 
-Also, the project code contains various tasks, which are detailed step-by-step in the code. More information on the algorithm and on the tasks can be found in the Udacity classroom. 
+<img src="./img/PCL_overhead.png">
 
-## Project File Structure
+In open3d, allows the user to drag and zoom to change the perspective. Here we can get a better look at the vehicles in the point cloud.
 
-📦project<br>
- ┣ 📂dataset --> contains the Waymo Open Dataset sequences <br>
- ┃<br>
- ┣ 📂misc<br>
- ┃ ┣ evaluation.py --> plot functions for tracking visualization and RMSE calculation<br>
- ┃ ┣ helpers.py --> misc. helper functions, e.g. for loading / saving binary files<br>
- ┃ ┗ objdet_tools.py --> object detection functions without student tasks<br>
- ┃ ┗ params.py --> parameter file for the tracking part<br>
- ┃ <br>
- ┣ 📂results --> binary files with pre-computed intermediate results<br>
- ┃ <br>
- ┣ 📂student <br>
- ┃ ┣ association.py --> data association logic for assigning measurements to tracks incl. student tasks <br>
- ┃ ┣ filter.py --> extended Kalman filter implementation incl. student tasks <br>
- ┃ ┣ measurements.py --> sensor and measurement classes for camera and lidar incl. student tasks <br>
- ┃ ┣ objdet_detect.py --> model-based object detection incl. student tasks <br>
- ┃ ┣ objdet_eval.py --> performance assessment for object detection incl. student tasks <br>
- ┃ ┣ objdet_pcl.py --> point-cloud functions, e.g. for birds-eye view incl. student tasks <br>
- ┃ ┗ trackmanagement.py --> track and track management classes incl. student tasks  <br>
- ┃ <br>
- ┣ 📂tools --> external tools<br>
- ┃ ┣ 📂objdet_models --> models for object detection<br>
- ┃ ┃ ┃<br>
- ┃ ┃ ┣ 📂darknet<br>
- ┃ ┃ ┃ ┣ 📂config<br>
- ┃ ┃ ┃ ┣ 📂models --> darknet / yolo model class and tools<br>
- ┃ ┃ ┃ ┣ 📂pretrained --> copy pre-trained model file here<br>
- ┃ ┃ ┃ ┃ ┗ complex_yolov4_mse_loss.pth<br>
- ┃ ┃ ┃ ┣ 📂utils --> various helper functions<br>
- ┃ ┃ ┃<br>
- ┃ ┃ ┗ 📂resnet<br>
- ┃ ┃ ┃ ┣ 📂models --> fpn_resnet model class and tools<br>
- ┃ ┃ ┃ ┣ 📂pretrained --> copy pre-trained model file here <br>
- ┃ ┃ ┃ ┃ ┗ fpn_resnet_18_epoch_300.pth <br>
- ┃ ┃ ┃ ┣ 📂utils --> various helper functions<br>
- ┃ ┃ ┃<br>
- ┃ ┗ 📂waymo_reader --> functions for light-weight loading of Waymo sequences<br>
- ┃<br>
- ┣ basic_loop.py<br>
- ┣ loop_over_dataset.py<br>
+<img src="./img/PCL_1.png">
+
+In this we can make out more details of the nearby vehicles. For example, in front and too the right of our vehicle, we can see a pickup truck pulling a cargo trailer. We can generally see vehicle types (sedans, SUVs, trucks), and some vehicle features, like side mirrors, hoods, and trucks. The data is no precise enough to show specific car types. Also, some parts of vehicles are obscured by other objects (including other vehicles). We can also see some surroundings, like plants and edges of buildings.
+
+The range image for this frame supports the observations in the point cloud. We can see trees, other cars, and in particular, that same pickup with the cargo trailer.
+
+<img src="./img/range_image_2.png">
+
+Looking at different point cloud examples, we can see different degrees of visibility, due to surroundings.
+
+These two point clouds from the first scene show a truck pulling a cargo trailer to the front and right of the vehicle.
+
+In both of these point clouds, edges of cars facing the sensor vehicle appear clearly, though bumpers sometimes don't, if they are all or partially obscured by other objects.
+
+<img src="./img/example_1.png">
+
+<img src="./img/example_2.png">
+
+These point clouds from the second scene show a slightly different angle where we can see the edges of the road, cars in front of the sensor vehicle, and what appear to be light poles on the median. The lidar intensity image at the top of this report is taken from the same scene, and also shows similar road boundaries, as well as cars in the area ahead.
+
+<img src="./img/example_3.png">
+
+<img src="./img/example_4.png">
+
+In the third scene, from a slightly higher angle, we can see the sorrounding vegetation, and some of the buildings.
+
+<img src="./img/example_5.png">
+
+<img src="./img/example_6.png">
+
+### 2. Do you see any benefits in camera-lidar fusion compared to lidar-only tracking (in theory and in your concrete results)? 
+
+Yes. While cameras are good at identifying objects, they don't provide direct ranging data. Lidar, on the other hand, gives precise ranging data, but less detail about the type of object it's detecting. By combining the two, we can create a detailed 3D map of specific objects, and their specific locations in that space. 
+
+The lidar data used in this project supports this model. It provides precise that about the locations of surrounding objects, but it's not always clear what these obects are. For example, some of the objects on the sides of the road could be either vegetation, or pedestrians. Combining these data with cameras would give more precise object type data.
+
+### 3. Code results
+
+#### Step 1
+
+The `show_range_image` function was created as follows:
+
+```
+def show_range_image(frame, lidar_name):
+
+    ####### ID_S1_EX1 START #######     
+    #######
+
+    # step 1 : extract lidar data and range image for the roof-mounted lidar
+    lidar = [obj for obj in frame.lasers if obj.name == lidar_name][0]
+    
+    # step 2 : extract the range and the intensity channel from the range image
+    if len(lidar.ri_return1.range_image_compressed) > 0: # use first response
+        ri = dataset_pb2.MatrixFloat()
+        ri.ParseFromString(zlib.decompress(lidar.ri_return1.range_image_compressed))
+        ri = np.array(ri.data).reshape(ri.shape.dims)
+    
+    # step 3 : set values <0 to zero
+    ri[ri<0]=0.0
+    
+    # step 4 : map the range channel onto an 8-bit scale and make sure that the full range of values is appropriately considered
+    ri_range = ri[:,:,0]
+    ri_range = (ri_range * 255 / (np.max(ri_range) - np.min(ri_range))).astype(np.uint8)
+    
+    # step 5 : map the intensity channel onto an 8-bit scale and normalize with the difference between the 1- and 99-percentile to mitigate the influence of outliers
+    ri_intensity = ri[:,:,1]
+    p_1 = np.percentile(ri_intensity,1)
+    p_99 = np.percentile(ri_intensity,99)
+    ri_intensity = 255 * np.clip(ri_intensity, p_1, p_99)/p_99 
+    ri_intensity = ri_intensity.astype(np.uint8)
+    
+    # step 6 : stack the range and intensity image vertically using np.vstack and convert the result to an unsigned 8-bit integer
+    img_range_intensity = np.vstack((ri_range, ri_intensity)).astype(np.uint8)
+    
+    # focus on +/- 45° around the image center
+    deg45 = int(ri_intensity.shape[1] / 8)
+    ri_center = int(ri_intensity.shape[1]/2)
+    ri_intensity = ri_intensity[:,ri_center-deg45:ri_center+deg45]
+    
+    return img_range_intensity
+```
+
+This function extracts the lidar data as described in lesson 2, removes outliers based on percentile, and narrows the width to the 90 degrees in front of the vehicle. The resulting image is
+
+<img src="./img/range_image.png">
+
+The `show_pcl` function is written as:
+
+```
+# visualize lidar point-cloud
+def show_pcl(pcl):
+
+    ####### ID_S1_EX2 START #######     
+    #######
+    
+
+    # step 1 : initialize open3d with key callback and create window
+    pcl_visualization = o3d.visualization.VisualizerWithKeyCallback()
+    pcl_visualization.create_window()
+    
+    global key_press
+    key_press = True
+    def callback(pcl_visualization):
+        global key_press
+        print("key pressed")
+        key_press = False
+        return
+    
+    pcl_visualization.register_key_callback(262, callback)
+    # step 2 : create instance of open3d point-cloud class
+    point_cloud = o3d.geometry.PointCloud()
+    
+    # step 3 : set points in pcd instance by converting the point-cloud into 3d vectors (using open3d function Vector3dVector)
+    point_cloud.points = o3d.utility.Vector3dVector(pcl[:,:3])
+    # step 4 : for the first frame, add the pcd instance to visualization using add_geometry; for all other frames, use update_geometry instead
+    pcl_visualization.add_geometry(point_cloud)
+    # step 5 : visualize point cloud and keep window open until right-arrow is pressed (key-code 262)
+    
+    while key_press:
+        pcl_visualization.poll_events()
+        pcl_visualization.update_renderer()
+```
+
+This uses a point cloud method similar to that in lesson 2, along with a callback to exit the open3d window. The result is a 3D point cloud that the user can drag and zoom to explore. An image is provided below.
+
+<img src="./img/PCL_1.png">
+
+#### Step 2
+
+The `bev_from_pcl` is written as:
+
+```
+def bev_from_pcl(lidar_pcl, configs, display=False):
+
+    # remove lidar points outside detection area and with too low reflectivity
+    mask = np.where((lidar_pcl[:, 0] >= configs.lim_x[0]) & (lidar_pcl[:, 0] <= configs.lim_x[1]) &
+                    (lidar_pcl[:, 1] >= configs.lim_y[0]) & (lidar_pcl[:, 1] <= configs.lim_y[1]) &
+                    (lidar_pcl[:, 2] >= configs.lim_z[0]) & (lidar_pcl[:, 2] <= configs.lim_z[1]))
+    lidar_pcl = lidar_pcl[mask]
+    
+    # shift level of ground plane to avoid flipping from 0 to 255 for neighboring pixels
+    lidar_pcl[:, 2] = lidar_pcl[:, 2] - configs.lim_z[0]  
+
+    # convert sensor coordinates to bev-map coordinates (center is bottom-middle)
+
+    ## step 1 :  compute bev-map discretization by dividing x-range by the bev-image height (see configs)
+    bev_discret = (configs.lim_x[1] - configs.lim_x[0]) / configs.bev_height
+    
+    ## step 2 : create a copy of the lidar pcl and transform all metrix x-coordinates into bev-image coordinates    
+    lidar_pcl_cpy = np.copy(lidar_pcl)
+    lidar_pcl_cpy[:, 0] = np.int_(np.floor(lidar_pcl_cpy[:, 0] / bev_discret))
+    
+    # step 3 : perform the same operation as in step 2 for the y-coordinates but make sure that no negative bev-coordinates occur
+    lidar_pcl_cpy[:, 1] = np.int_(np.floor(lidar_pcl_cpy[:, 1] / bev_discret) + configs.bev_width / 2)
+    
+    # step 4 : visualize point-cloud using the function show_pcl from a previous task
+    if display:
+        show_pcl(lidar_pcl_cpy)
+    
+    #######
+    ####### ID_S2_EX1 END #######     
+    
+    
+    # Compute intensity layer of the BEV map
+    ####### ID_S2_EX2 START #######     
+    #######
+    # print("student task ID_S2_EX2")
+
+    ## step 1 : create a numpy array filled with zeros which has the same dimensions as the BEV map
+    intensity_map = np.zeros((configs.bev_height + 1, configs.bev_width + 1))
+    
+    # step 2 : re-arrange elements in lidar_pcl_cpy by sorting first by x, then y, then -z (use numpy.lexsort)
+    lidar_pcl_cpy[lidar_pcl_cpy[:, 3] > 1.0, 3] = 1.0
+    lidar_pcl_top = lidar_pcl_cpy[np.lexsort((-lidar_pcl_cpy[:, 2], lidar_pcl_cpy[:, 1], lidar_pcl_cpy[:, 0]))]
+    
+    ## step 3 : extract all points with identical x and y such that only the top-most z-coordinate is kept (use numpy.unique)
+    ##          also, store the number of points per x,y-cell in a variable named "counts" for use in the next task
+    _, indices = np.unique(lidar_pcl_cpy[:, 0:2], axis=0, return_index=True)
+    lidar_pcl_top = lidar_pcl_cpy[indices]
+    
+    ## step 4 : assign the intensity value of each unique entry in lidar_top_pcl to the intensity map 
+    ##          make sure that the intensity is scaled in such a way that objects of interest (e.g. vehicles) are clearly visible    
+    ##          also, make sure that the influence of outliers is mitigated by normalizing intensity on the difference between the max. and min. value within the point cloud
+    intensity_map[np.int_(lidar_pcl_top[:, 0]), np.int_(lidar_pcl_top[:, 1])] = \
+                  lidar_pcl_top[:, 3] / (np.max(lidar_pcl_top[:, 3])-np.min(lidar_pcl_top[:, 3]))
+    
+    ## step 5 : temporarily visualize the intensity map using OpenCV to make sure that vehicles separate well from the background
+    img_intensity = (intensity_map * 256).astype(np.uint8)
+    if display:
+        cv2.imshow('img_intensity', img_intensity)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    #######
+    ####### ID_S2_EX2 END ####### 
 
 
+    # Compute height layer of the BEV map
+    ####### ID_S2_EX3 START #######     
+    #######
+    print("student task ID_S2_EX3")
 
-## Installation Instructions for Running Locally
-### Cloning the Project
-In order to create a local copy of the project, please click on "Code" and then "Download ZIP". Alternatively, you may of-course use GitHub Desktop or Git Bash for this purpose. 
+    ## step 1 : create a numpy array filled with zeros which has the same dimensions as the BEV map
+    height_map = np.zeros((configs.bev_height + 1, configs.bev_width + 1))
+    
+    ## step 2 : assign the height value of each unique entry in lidar_top_pcl to the height map 
+    ##          make sure that each entry is normalized on the difference between the upper and lower height defined in the config file
+    ##          use the lidar_pcl_top data structure from the previous task to access the pixels of the height_map
+    height_map[np.int_(lidar_pcl_top[:, 0]), np.int_(lidar_pcl_top[:, 1])] = lidar_pcl_top[:, 2] / float(configs.lim_z[1] - configs.lim_z[0])
+    
+    ## step 3 : temporarily visualize the intensity map using OpenCV to make sure that vehicles separate well from the background
+    img_height = (height_map * 256).astype(np.uint8)
+    if display:
+        cv2.imshow('height_map', height_map)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    #######
+    ####### ID_S2_EX3 END #######       
+    
+    # Compute density layer of the BEV map
+    density_map = np.zeros((configs.bev_height + 1, configs.bev_width + 1))
+    _, counts = np.unique(lidar_pcl_cpy[:, 0:2], axis=0, return_counts=True)
+    density_map[np.int_(lidar_pcl_top[:, 0]), np.int_(lidar_pcl_top[:, 1])] = np.minimum(1.0, np.log(counts + 1) / np.log(64)) 
+        
+    # assemble 3-channel bev-map from individual maps
+    bev_map = np.zeros((3, configs.bev_height, configs.bev_width))
+    bev_map[2, :, :] = density_map[:configs.bev_height, :configs.bev_width]  # r_map
+    bev_map[1, :, :] = height_map[:configs.bev_height, :configs.bev_width]  # g_map
+    bev_map[0, :, :] = intensity_map[:configs.bev_height, :configs.bev_width]  # b_map
 
-### Python
-The project has been written using Python 3.7. Please make sure that your local installation is equal or above this version. 
+    # expand dimension of bev_map before converting into a tensor
+    s1, s2, s3 = bev_map.shape
+    bev_maps = np.zeros((1, s1, s2, s3))
+    bev_maps[0] = bev_map
 
-### Package Requirements
-All dependencies required for the project have been listed in the file `requirements.txt`. You may either install them one-by-one using pip or you can use the following command to install them all at once: 
-`pip3 install -r requirements.txt` 
+    bev_maps = torch.from_numpy(bev_maps)  # create tensor from birds-eye view
+    input_bev_maps = bev_maps.to(configs.device, non_blocking=True).float()
+    return input_bev_maps
+    
+```
 
-### Waymo Open Dataset Reader
-The Waymo Open Dataset Reader is a very convenient toolbox that allows you to access sequences from the Waymo Open Dataset without the need of installing all of the heavy-weight dependencies that come along with the official toolbox. The installation instructions can be found in `tools/waymo_reader/README.md`. 
+This follows the method described in lesson 3. We create an initial point cloud by flooring at zero and normalizing the height. 
 
-### Waymo Open Dataset Files
-This project makes use of three different sequences to illustrate the concepts of object detection and tracking. These are: 
-- Sequence 1 : `training_segment-1005081002024129653_5313_150_5333_150_with_camera_labels.tfrecord`
-- Sequence 2 : `training_segment-10072231702153043603_5725_000_5745_000_with_camera_labels.tfrecord`
-- Sequence 3 : `training_segment-10963653239323173269_1924_000_1944_000_with_camera_labels.tfrecord`
+<img src="./img/step_2_1.png">
 
-To download these files, you will have to register with Waymo Open Dataset first: [Open Dataset – Waymo](https://waymo.com/open/terms), if you have not already, making sure to note "Udacity" as your institution.
+We then map on the point intensity and add the height layer.
 
-Once you have done so, please [click here](https://console.cloud.google.com/storage/browser/waymo_open_dataset_v_1_2_0_individual_files) to access the Google Cloud Container that holds all the sequences. Once you have been cleared for access by Waymo (which might take up to 48 hours), you can download the individual sequences. 
+<img src="./img/step_2_2.png">
 
-The sequences listed above can be found in the folder "training". Please download them and put the `tfrecord`-files into the `dataset` folder of this project.
+#### Step 3
 
+Next, we actually detect objects by loading the model from the SFA3D repo. 
 
-### Pre-Trained Models
-The object detection methods used in this project use pre-trained models which have been provided by the original authors. They can be downloaded [here](https://drive.google.com/file/d/1Pqx7sShlqKSGmvshTYbNDcUEYyZwfn3A/view?usp=sharing) (darknet) and [here](https://drive.google.com/file/d/1RcEfUIF1pzDZco8PJkZ10OL-wLL2usEj/view?usp=sharing) (fpn_resnet). Once downloaded, please copy the model files into the paths `/tools/objdet_models/darknet/pretrained` and `/tools/objdet_models/fpn_resnet/pretrained` respectively.
+The `load_configs_model` function is modified as:
 
-### Using Pre-Computed Results
+```
+        configs.model_path = os.path.join(parent_path, 'tools', 'objdet_models', 'resnet')
+        configs.pretrained_filename = os.path.join(configs.model_path, 'pretrained', 'fpn_resnet_18_epoch_300.pth')
+        configs.arch = 'fpn_resnet'
+        configs.num_layers = 18
+        configs.K = 50
+        configs.batch_size = 4
+        configs.conf_thresh = 0.5
+        configs.nms_thresh = 0.4
+        configs.num_workers = 4
+        
+        configs.pin_memory = True
+        configs.distributed = False  # For testing on 1 GPU only
 
-In the main file `loop_over_dataset.py`, you can choose which steps of the algorithm should be executed. If you want to call a specific function, you simply need to add the corresponding string literal to one of the following lists: 
+        configs.input_size = (608, 608)
+        configs.hm_size = (152, 152)
+        configs.down_ratio = 4
+        configs.max_objects = 50
+        
+        configs.output_format = 'image'
+        configs.output_video_fn = 'out_fpn_resnet'
 
-- `exec_data` : controls the execution of steps related to sensor data. 
-  - `pcl_from_rangeimage` transforms the Waymo Open Data range image into a 3D point-cloud
-  - `load_image` returns the image of the front camera
+        configs.imagenet_pretrained = False
+        configs.head_conv = 64
+        configs.num_classes = 3
+        configs.num_center_offset = 2
+        configs.num_z = 1
+        configs.num_dim = 3
+        configs.num_direction = 2  # sin, cos
 
-- `exec_detection` : controls which steps of model-based 3D object detection are performed
-  - `bev_from_pcl` transforms the point-cloud into a fixed-size birds-eye view perspective
-  - `detect_objects` executes the actual detection and returns a set of objects (only vehicles) 
-  - `validate_object_labels` decides which ground-truth labels should be considered (e.g. based on difficulty or visibility)
-  - `measure_detection_performance` contains methods to evaluate detection performance for a single frame
+        configs.heads = {
+            'hm_cen': configs.num_classes,
+            'cen_offset': configs.num_center_offset,
+            'direction': configs.num_direction,
+            'z_coor': configs.num_z,
+            'dim': configs.num_dim
+            }
+        configs.num_input_features = 4
+```
 
-In case you do not include a specific step into the list, pre-computed binary files will be loaded instead. This enables you to run the algorithm and look at the results even without having implemented anything yet. The pre-computed results for the mid-term project need to be loaded using [this](https://drive.google.com/drive/folders/1-s46dKSrtx8rrNwnObGbly2nO3i4D7r7?usp=sharing) link. Please use the folder `darknet` first. Unzip the file within and put its content into the folder `results`.
+`create_model`
 
-- `exec_tracking` : controls the execution of the object tracking algorithm
+```
+elif 'fpn_resnet' in configs.arch:
+        print('using ResNet architecture with feature pyramid')
+        
+        ####### ID_S3_EX1-4 START #######     
+        #######
+        print("student task ID_S3_EX1-4")
+        model = fpn_resnet.get_pose_net(num_layers=configs.num_layers, heads=configs.heads, head_conv=configs.head_conv,
+                                        imagenet_pretrained=configs.imagenet_pretrained)
+```
 
-- `exec_visualization` : controls the visualization of results
-  - `show_range_image` displays two LiDAR range image channels (range and intensity)
-  - `show_labels_in_image` projects ground-truth boxes into the front camera image
-  - `show_objects_and_labels_in_bev` projects detected objects and label boxes into the birds-eye view
-  - `show_objects_in_bev_labels_in_camera` displays a stacked view with labels inside the camera image on top and the birds-eye view with detected objects on the bottom
-  - `show_tracks` displays the tracking results
-  - `show_detection_performance` displays the performance evaluation based on all detected 
-  - `make_tracking_movie` renders an output movie of the object tracking results
+`detect_objects`
 
-Even without solving any of the tasks, the project code can be executed. 
+```
+        elif 'fpn_resnet' in configs.arch:
+            # decode output and perform post-processing
+            
+            ####### ID_S3_EX1-5 START #######     
+            #######
+            print("student task ID_S3_EX1-5")
+            outputs['hm_cen'] = torch.sigmoid(outputs['hm_cen'])
+            outputs['cen_offset'] = torch.sigmoid(outputs['cen_offset'])
+            detections = decode(outputs['hm_cen'],outputs['cen_offset'],outputs['direction'],outputs['z_coor'],outputs['dim'],K=configs.K)
+            detections = detections.cpu().numpy().astype(np.float32)
+            detections = post_processing(detections, configs) 
+            detections = detections[0][1]
+            #######
+            ####### ID_S3_EX1-5 END #######  
+```
 
-The final project uses pre-computed lidar detections in order for all students to have the same input data. If you use the workspace, the data is prepared there already. Otherwise, [download the pre-computed lidar detections](https://drive.google.com/drive/folders/1IkqFGYTF6Fh_d8J3UjQOSNJ2V42UDZpO?usp=sharing) (~1 GB), unzip them and put them in the folder `results`.
+The resulting image places boxes around the detected vehicles:
 
-## External Dependencies
-Parts of this project are based on the following repositories: 
-- [Simple Waymo Open Dataset Reader](https://github.com/gdlg/simple-waymo-open-dataset-reader)
-- [Super Fast and Accurate 3D Object Detection based on 3D LiDAR Point Clouds](https://github.com/maudzung/SFA3D)
-- [Complex-YOLO: Real-time 3D Object Detection on Point Clouds](https://github.com/maudzung/Complex-YOLOv4-Pytorch)
+<img src="./img/step_3_1.png">
 
+#### Step 4
 
-## License
-[License](LICENSE.md)
+Finally, we evaluate the results using the MaP score.
+
+The following section is added to the `measure_detection_performance` function:
+
+```
+            ####### ID_S4_EX1 START #######     
+            #######
+            print("student task ID_S4_EX1 ")
+
+            ## step 1 : extract the four corners of the current label bounding-box
+            bbox1 = tools.compute_box_corners(label.box.center_x, 
+                                              label.box.center_y, 
+                                              label.box.width, 
+                                              label.box.length, 
+                                              label.box.heading)
+            ## step 2 : loop over all detected objects
+            for an_obj in detections:
+                ## step 3 : extract the four corners of the current detection
+                obj_id, x_coor, y_coor, z_coor, h_coor, w_obj, l_obj, yaw_obj = an_obj
+                bbox2 = tools.compute_box_corners(x_coor, y_coor, w_obj, l_obj, yaw_obj)
+                ## step 4 : compute the center distance between label and detection bounding-box in x, y, and z
+                diff_x = np.array(label.box.center_x - x_coor).item()
+                diff_y = np.array(label.box.center_y - y_coor).item()
+                diff_z = np.array(label.box.center_z - z_coor).item()
+                ## step 5 : compute the intersection over union (IOU) between label and detection bounding-box
+                poly1 = Polygon(bbox1)
+                poly2 = Polygon(bbox2)
+                intersection = poly1.intersection(poly2).area 
+                union = poly1.union(poly2).area
+                iou = intersection / union
+                ## step 6 : if IOU exceeds min_iou threshold, store [iou,dist_x, dist_y, dist_z] in matches_lab_det and increase the TP count
+                if iou > min_iou:
+                    matches_lab_det.append([iou,diff_x, diff_y, diff_z ])
+            #######
+            ####### ID_S4_EX1 END ####### 
+```
+
+For each box, we compute the intersection over union versus the ground truth. If the IoU is above the min_iou threshold, we add that box to our detection matches.
+
+Next, we compute the precision and recall by further modifying the `measure_detection_performance` function:
+
+```
+    print("student task ID_S4_EX2")
+    
+    # compute positives and negatives for precision/recall
+    
+    ## step 1 : compute the total number of positives present in the scene
+    all_positives = labels_valid.sum()
+
+    ## step 2 : compute the number of false negatives
+    true_positives=len(ious)
+    false_negatives = all_positives - true_positives
+
+    ## step 3 : compute the number of false positives
+    false_positives = len(detections) - true_positives
+    
+    #######
+    ####### ID_S4_EX2 END #######     
+    
+    pos_negs = [all_positives, true_positives, false_negatives, false_positives]
+    det_performance = [ious, center_devs, pos_negs]
+    
+    return det_performance
+```
+
+And the `compute_performance_stats` function:
+
+```
+    ####### ID_S4_EX3 START #######     
+    #######    
+    print('student task ID_S4_EX3')
+
+    ## step 1 : extract the total number of positives, true positives, false negatives and false positives
+    ap = sum(pos_negs[:,0])
+    tp = sum(pos_negs[:,1])
+    fn = sum(pos_negs[:,2])
+    fp = sum(pos_negs[:,3])
+    
+    ## step 2 : compute precision
+    precision = tp /(tp + fp)
+
+    ## step 3 : compute recall 
+    recall = tp /(tp + fn)
+
+    #######    
+    ####### ID_S4_EX3 END ####### 
+```
+
+On the darknet model, we get a precision of .95 and a recall of .94
+
+<img src="./img/step_4.png">

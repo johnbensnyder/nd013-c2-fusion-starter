@@ -28,7 +28,7 @@ from tools.objdet_models.resnet.utils.evaluation_utils import decode, post_proce
 
 from tools.objdet_models.darknet.models.darknet2pytorch import Darknet as darknet
 from tools.objdet_models.darknet.utils.evaluation_utils import post_processing_v2
-
+from tools.objdet_models.resnet.utils.torch_utils import _sigmoid
 
 # load model-related parameters into an edict
 def load_configs_model(model_name='darknet', configs=None):
@@ -48,7 +48,7 @@ def load_configs_model(model_name='darknet', configs=None):
         configs.arch = 'darknet'
         configs.batch_size = 4
         configs.cfgfile = os.path.join(configs.model_path, 'config', 'complex_yolov4.cfg')
-        configs.conf_thresh = 0.5
+        configs.conf_thresh = 0.1
         configs.distributed = False
         configs.img_size = 608
         configs.nms_thresh = 0.4
@@ -58,12 +58,44 @@ def load_configs_model(model_name='darknet', configs=None):
         configs.use_giou_loss = False
 
     elif model_name == 'fpn_resnet':
-        ####### ID_S3_EX1-3 START #######     
-        #######
-        print("student task ID_S3_EX1-3")
+        configs.model_path = os.path.join(parent_path, 'tools', 'objdet_models', 'resnet')
+        configs.pretrained_filename = os.path.join(configs.model_path, 'pretrained', 'fpn_resnet_18_epoch_300.pth')
+        configs.arch = 'fpn_resnet'
+        configs.num_layers = 18
+        configs.K = 50
+        configs.batch_size = 4
+        configs.conf_thresh = 0.5
+        configs.nms_thresh = 0.4
+        configs.num_workers = 4
+        
+        configs.pin_memory = True
+        configs.distributed = False  # For testing on 1 GPU only
 
-        #######
-        ####### ID_S3_EX1-3 END #######     
+        configs.input_size = (608, 608)
+        configs.hm_size = (152, 152)
+        configs.down_ratio = 4
+        configs.max_objects = 50
+        
+        configs.output_format = 'image'
+        configs.output_video_fn = 'out_fpn_resnet'
+
+        configs.imagenet_pretrained = False
+        configs.head_conv = 64
+        configs.num_classes = 3
+        configs.num_center_offset = 2
+        configs.num_z = 1
+        configs.num_dim = 3
+        configs.num_direction = 2  # sin, cos
+
+        configs.heads = {
+            'hm_cen': configs.num_classes,
+            'cen_offset': configs.num_center_offset,
+            'direction': configs.num_direction,
+            'z_coor': configs.num_z,
+            'dim': configs.num_dim
+            }
+        configs.num_input_features = 4
+        
 
     else:
         raise ValueError("Error: Invalid model name")
@@ -118,7 +150,8 @@ def create_model(configs):
         ####### ID_S3_EX1-4 START #######     
         #######
         print("student task ID_S3_EX1-4")
-
+        model = fpn_resnet.get_pose_net(num_layers=configs.num_layers, heads=configs.heads, head_conv=configs.head_conv,
+                                        imagenet_pretrained=configs.imagenet_pretrained)
         #######
         ####### ID_S3_EX1-4 END #######     
     
@@ -167,7 +200,12 @@ def detect_objects(input_bev_maps, model, configs):
             ####### ID_S3_EX1-5 START #######     
             #######
             print("student task ID_S3_EX1-5")
-
+            outputs['hm_cen'] = torch.sigmoid(outputs['hm_cen'])
+            outputs['cen_offset'] = torch.sigmoid(outputs['cen_offset'])
+            detections = decode(outputs['hm_cen'],outputs['cen_offset'],outputs['direction'],outputs['z_coor'],outputs['dim'],K=configs.K)
+            detections = detections.cpu().numpy().astype(np.float32)
+            detections = post_processing(detections, configs) 
+            detections = detections[0][1]
             #######
             ####### ID_S3_EX1-5 END #######     
 
@@ -180,12 +218,22 @@ def detect_objects(input_bev_maps, model, configs):
     objects = [] 
 
     ## step 1 : check whether there are any detections
+    if len(detections)==0:
+        return objects
+    ## step 2 : loop over all detections
+    for an_obj in detections:
+        ## step 3 : perform the conversion using the limits for x, y and z set in the configs structure
+        obj_id, y_coor, x_coor, z_coor, h_coor, w_obj, l_obj, yaw_obj = an_obj
+        y_diff = configs.lim_y[1] - configs.lim_y[0]
+        x_diff = configs.lim_x[1] - configs.lim_x[0]
+        x = x_coor / configs.bev_height * x_diff
+        y = y_coor / configs.bev_width * y_diff - y_diff/2.0 
+        w_obj = w_obj / configs.bev_width * y_diff
+        l_obj = l_obj / configs.bev_height * x_diff
 
-        ## step 2 : loop over all detections
-        
-            ## step 3 : perform the conversion using the limits for x, y and z set in the configs structure
-        
-            ## step 4 : append the current object to the 'objects' array
+        ## step 4 : append the current object to the 'objects' array
+        objects.append([1, x, y, z_coor, h_coor, w_obj, l_obj, yaw_obj])
+    print(objects)
         
     #######
     ####### ID_S3_EX2 START #######   

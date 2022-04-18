@@ -13,7 +13,7 @@
 # general package imports
 import numpy as np
 import matplotlib
-matplotlib.use('wxagg') # change backend so that figure maximizing works on Mac as well     
+#matplotlib.use('wxagg') # change backend so that figure maximizing works on Mac as well     
 import matplotlib.pyplot as plt
 
 import torch
@@ -49,17 +49,29 @@ def measure_detection_performance(detections, labels, labels_valid, min_iou=0.5)
             print("student task ID_S4_EX1 ")
 
             ## step 1 : extract the four corners of the current label bounding-box
-            
+            bbox1 = tools.compute_box_corners(label.box.center_x, 
+                                              label.box.center_y, 
+                                              label.box.width, 
+                                              label.box.length, 
+                                              label.box.heading)
             ## step 2 : loop over all detected objects
-
+            for an_obj in detections:
                 ## step 3 : extract the four corners of the current detection
-                
-                ## step 4 : computer the center distance between label and detection bounding-box in x, y, and z
-                
+                obj_id, x_coor, y_coor, z_coor, h_coor, w_obj, l_obj, yaw_obj = an_obj
+                bbox2 = tools.compute_box_corners(x_coor, y_coor, w_obj, l_obj, yaw_obj)
+                ## step 4 : compute the center distance between label and detection bounding-box in x, y, and z
+                diff_x = np.array(label.box.center_x - x_coor).item()
+                diff_y = np.array(label.box.center_y - y_coor).item()
+                diff_z = np.array(label.box.center_z - z_coor).item()
                 ## step 5 : compute the intersection over union (IOU) between label and detection bounding-box
-                
+                poly1 = Polygon(bbox1)
+                poly2 = Polygon(bbox2)
+                intersection = poly1.intersection(poly2).area 
+                union = poly1.union(poly2).area
+                iou = intersection / union
                 ## step 6 : if IOU exceeds min_iou threshold, store [iou,dist_x, dist_y, dist_z] in matches_lab_det and increase the TP count
-                
+                if iou > min_iou:
+                    matches_lab_det.append([iou,diff_x, diff_y, diff_z ])
             #######
             ####### ID_S4_EX1 END #######     
             
@@ -69,7 +81,8 @@ def measure_detection_performance(detections, labels, labels_valid, min_iou=0.5)
             ious.append(best_match[0])
             center_devs.append(best_match[1:])
 
-
+    print(ious)
+    print(center_devs)
     ####### ID_S4_EX2 START #######     
     #######
     print("student task ID_S4_EX2")
@@ -77,13 +90,14 @@ def measure_detection_performance(detections, labels, labels_valid, min_iou=0.5)
     # compute positives and negatives for precision/recall
     
     ## step 1 : compute the total number of positives present in the scene
-    all_positives = 0
+    all_positives = labels_valid.sum()
 
     ## step 2 : compute the number of false negatives
-    false_negatives = 0
+    true_positives=len(ious)
+    false_negatives = all_positives - true_positives
 
     ## step 3 : compute the number of false positives
-    false_positives = 0
+    false_positives = len(detections) - true_positives
     
     #######
     ####### ID_S4_EX2 END #######     
@@ -95,7 +109,7 @@ def measure_detection_performance(detections, labels, labels_valid, min_iou=0.5)
 
 
 # evaluate object detection performance based on all frames
-def compute_performance_stats(det_performance_all):
+def compute_performance_stats(det_performance_all, configs_det):
 
     # extract elements
     ious = []
@@ -106,17 +120,22 @@ def compute_performance_stats(det_performance_all):
         center_devs.append(item[1])
         pos_negs.append(item[2])
     
+    pos_negs = np.array(pos_negs)
     ####### ID_S4_EX3 START #######     
     #######    
     print('student task ID_S4_EX3')
 
     ## step 1 : extract the total number of positives, true positives, false negatives and false positives
+    ap = sum(pos_negs[:,0])
+    tp = sum(pos_negs[:,1])
+    fn = sum(pos_negs[:,2])
+    fp = sum(pos_negs[:,3])
     
     ## step 2 : compute precision
-    precision = 0.0
+    precision = tp /(tp + fp)
 
     ## step 3 : compute recall 
-    recall = 0.0
+    recall = tp /(tp + fn)
 
     #######    
     ####### ID_S4_EX3 END #######     
