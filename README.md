@@ -24,35 +24,61 @@ The range image for this frame supports the observations in the point cloud. We 
 
 <img src="./img/range_image_2.png">
 
-Looking at different point cloud examples, we can see different degrees of visibility, due to surroundings.
+#### Step 1 Part 2 - Examining Point Cloud Examples
 
-These two point clouds from the first scene show a truck pulling a cargo trailer to the front and right of the vehicle.
-
-In both of these point clouds, edges of cars facing the sensor vehicle appear clearly, though bumpers sometimes don't, if they are all or partially obscured by other objects.
+Below, we look closely at 10 point cloud examples, 6 from sequence 3, and 2 each from sequences 1 and 2.
 
 <img src="./img/example_1.png">
 
+In the first frame of sequence 3, we start with the bird's eye view, and see that the lidar vehicle is passing through an intersection. It has a row of cars to its left, and what looks like a truck pulling a trailer to its right. We can clearly make out vehicles, and get some sense of vehicle type (ie truck vs car), but it is difficult to make out specific vehicle details, like make and model.
+
 <img src="./img/example_2.png">
 
-These point clouds from the second scene show a slightly different angle where we can see the edges of the road, cars in front of the sensor vehicle, and what appear to be light poles on the median. The lidar intensity image at the top of this report is taken from the same scene, and also shows similar road boundaries, as well as cars in the area ahead.
+In the same frame, we can zoom in and change orientation to get a clearer view of the trailer to our right. It appears to be a flatbed cargo trailer, the kind that might be used to carry a car. We can also see that the folded ramp at the back of the trailer occludes the space further ahead and to the right. There are also two objects to the right and behind the trailer. This look like construction markers.
 
 <img src="./img/example_3.png">
 
+Rotating the view to the right and behind the lidar vehicle, we can see oncoming traffic from the intersection. There is also a faint outline of the curb, and objects on the sidewalk.
+
 <img src="./img/example_4.png">
 
-In the third scene, from a slightly higher angle, we can see the sorrounding vegetation, and some of the buildings.
+Moving ahead to frame 50 of the same sequence, the lidar vehicle is not alongside the truck with the trailer. Interestingly, the trailer is now much grainier, despite being close and not occluded. The lidar sensor still sees the trailer, but seems to be having trouble with resolution at this close of range.
 
 <img src="./img/example_5.png">
 
+Zooming out from the same frame, and rotating to the left, we can see that we are passing another intersection. In this case, there appear to be tall walls, possibly buildings, along this side street, as indicated by the red points.
+
 <img src="./img/example_6.png">
 
-### 2. Do you see any benefits in camera-lidar fusion compared to lidar-only tracking (in theory and in your concrete results)? 
+Rotating further to the left, we an see that the wall continues down the road. There is what looks like vegetation on the oppisite side of the street. Also, there are two object to the front right of the lidar vehicle (in the foreground from this perspective) that look like they could be people, based on size and height. However, there isn't sufficient resolution to positively identify them.
+
+<img src="./img/example_7.png">
+
+Moving to frame 0 of sequence 1, we can see different features of this road. There's a median with some kind of poles, possibly lights. There are also low walls on both sides of the road, and possibly vegetation to the left. There is less traffic in this example, but we can see a car behind, and several cars ahead.
+
+<img src="./img/example_8.png">
+
+Moving to frame 50, there's something interesting. We're passing a side street on the right. But the point cloud gradually shifts to green and red down this side street, indicating that this is a steep hill.
+
+<img src="./img/example_9.png">
+
+Finally, looking at sequence 2, we see a road mostly devoid of traffic, but with a lot of vegetation along the sides. This might be a less dense, possibly suburban, area.
+
+<img src="./img/example_10.png">
+
+Later in the same sequence, we see an interesting shift in color to the right. While points on the road appear in light blue, and higher point appear in green, then yellow and red, here we see dark blue. This would seem to indicate there is a large ditch or ravine to the right of the vehicle.
+
+Throughout these examples, general vehicle shapes are consistently visible. We can also get a good idea of height of vehicles. However, small details like side mirrors don't consistently appear. There are also regions around windows that don't appear on lidar.
+
+Also, comparing the sequence 1 point clouds to the range images in part one, we can clear see the wall picked up to the left in both. There also appear to be a wall on the right, though the intensity is less. This comes through in the range image, where the right appears darker. Finally, we can see that there are objects on the median, but they are not light poles, they are trees.
+
+### Step 2. Do you see any benefits in camera-lidar fusion compared to lidar-only tracking (in theory and in your concrete results)? 
 
 Yes. While cameras are good at identifying objects, they don't provide direct ranging data. Lidar, on the other hand, gives precise ranging data, but less detail about the type of object it's detecting. By combining the two, we can create a detailed 3D map of specific objects, and their specific locations in that space. 
 
 The lidar data used in this project supports this model. It provides precise that about the locations of surrounding objects, but it's not always clear what these obects are. For example, some of the objects on the sides of the road could be either vegetation, or pedestrians. Combining these data with cameras would give more precise object type data.
 
-### 3. Code results
+### Step 3. Code results
 
 #### Step 1
 
