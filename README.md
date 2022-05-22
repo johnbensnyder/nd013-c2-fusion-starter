@@ -182,3 +182,7 @@ In the project we see some cases where objects quickly appear and disappear, wit
 ## Ways to improve tracking results
 
 These results are good, but I can imagine the methods would struggle in some environments. For example, we might need to implement a more complex association algorithm in a city setting with many close proximity objects. We might also allow the system to use more complex mixtures of guassians in Kalman filters based on the environment. This would allow us to predict the probability of two different paths. For example, when a car is approaching an intersection, taking the possibility of it turning into account in the path prediction, rather than assuming a constant velocity.
+
+## Tracking results video
+
+<img src="./img/my_tracking_results.gif">
