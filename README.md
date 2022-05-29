@@ -20,6 +20,10 @@ update track 0 with lidar measurement 0
 track 0 score = 13.6
 ```
 
+The result for this particular sequence only captures a single track, and only briefly, so the RMSE remains high (step 2 of the instructions mentions that this is expected at this stage).
+
+<img src="./img/step_2_rmse.png">
+
 ### Part 3
 
 The problem with multiobject tracking is that it is sometimes difficult to determine what measurements are updating what tracks. In this case, we implement a simple nearest neighbor algorithm using the Mahalanobis distance, similar to that describes in lesson 7 part 14. The core code of this algorithm is contained in the Mahalanobis distance formula:
@@ -120,6 +124,10 @@ def get_closest_track_and_meas(self):
         return update_track, update_meas  
 ```
 
+The picks up multiple tracks, with a relatively low RMSE. Two tracks appear throughout most of the sequence, while a third starts in the middle.
+
+<img src="./img/step_3_rmse.png">
+
 ### Part 4
 
 The final step of the project is to implement a non-linear measurement model in order to combine the camera and lidar data. The core components of this section are checking if an object is in the field of view
@@ -165,7 +173,7 @@ And applying a non-linear transformation to project camera data in image coordin
                 return hx
 ```
 
-With these four pieces in place, the system is able to reliably track multiple objects using both camera and lidar data.
+With these four pieces in place, the system is able to reliably track multiple objects using both camera and lidar data. Compared to the tracks in part 3, these are more stable, with a slightly lower RMSE.
 
 <img src="./img/association_1.png">
 
